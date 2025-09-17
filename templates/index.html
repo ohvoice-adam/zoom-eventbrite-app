@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zoom-Eventbrite Integration</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .section {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            background: #005a87;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .results {
+            margin-top: 20px;
+        }
+
+        .meeting-item, .event-item {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+        }
+
+        .meeting-item h4, .event-item h4 {
+            margin-bottom: 8px;
+            color: #495057;
+        }
+
+        .meeting-meta, .event-meta {
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+
+        .youtube-status {
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-top: 8px;
+            display: inline-block;
+        }
+
+        .youtube-exists {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .youtube-new {
+            background: #d1edff;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .youtube-video-link {
+            display: inline-block;
+            margin-left: 10px;
+            padding: 4px 8px;
+            background: #ff0000;
+            color: white;
+            text-decoration: none;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .youtube-video-link:hover {
+            background: #cc0000;
+            color: white;
+        }
+
+        .matches {
+            border: 2px solid #28a745;
+            background: #d4edda;
+        }
+
+        .match-pair {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #28a745;
+            border-radius: 4px;
+            background: #f8fff9;
+        }
+
+        .processing-status {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #007cba;
+            transition: width 0.3s ease;
+        }
+
+        .status-messages {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .youtube-auth-status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .auth-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .auth-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .auth-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .flex-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        @media (max-width: 768px) {
+            .match-pair {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Zoom-Eventbrite Integration</h1>
+            <p>Match Zoom recordings with Eventbrite events and upload to YouTube</p>
+        </div>
+
+        <!-- YouTube Authentication Status -->
+        <div class="section">
+            <h2>YouTube Integration Status</h2>
+            <div id="youtube-status" class="youtube-auth-status">
+                <span>Checking authentication status...</span>
+            </div>
+            <button id="refresh-youtube-cache" style="display: none;">Refresh Video Cache</button>
+        </div>
+
+        <!-- Date Range Selection -->
+        <div class="section">
+            <h2>1. Select Date Range</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div class="form-group">
+                    <label for="start-date">Start Date:</label>
+                    <input type="date" id="start-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="end-date">End Date:</label>
+                    <input type="date" id="end-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="zoom-user">Zoom User:</label>
+                    <select id="zoom-user">
+                        <option value="me">Loading users...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="eventbrite-org">Eventbrite Organization:</label>
+                    <select id="eventbrite-org">
+                        <option value="">Loading organizations...</option>
+                    </select>
+                </div>
+            </div>
+            <button id="fetch-meetings" onclick="fetchMeetings()">Get Zoom Meetings</button>
+        </div>
+
+        <!-- Zoom Meetings -->
+        <div class="section">
+            <h2>2. Zoom Meetings with Recordings</h2>
+            <div id="meetings-list">
+                <p>No meetings loaded. Use the date range selector above.</p>
+            </div>
+        </div>
+
+        <!-- Event Matching -->
+        <div class="section">
+            <h2>3. Match Events</h2>
+            <div id="matches-container" style="display: none;">
+                <h3>Confirmed Matches</h3>
+                <div id="matches-list"></div>
+                <button id="process-matches" onclick="processMatches()" class="btn-success">
+                    Process All Matches
+                </button>
+            </div>
+        </div>
+
+        <!-- Processing Status -->
+        <div id="processing-section" class="processing-status" style="display: none;">
+            <h2>Processing Status</h2>
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill" style="width: 0%;"></div>
+            </div>
+            <div id="progress-text">Initializing...</div>
+            <div id="status-messages" class="status-messages"></div>
+        </div>
+    </div>
+
+    <script>
+        let meetings = [];
+        let organizations = [];
+        let users = [];
+        let matches = [];
+        let processingSessionId = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set default dates (last 30 days)
+            const endDate = new Date();
+            const startDate = new Date(endDate);
+            startDate.setDate(startDate.getDate() - 30);
+            
+            document.getElementById('start-date').value = startDate.toISOString().split('T')[0];
+            document.getElementById('end-date').value = endDate.toISOString().split('T')[0];
+            
+            // Load initial data
+            loadUsers();
+            loadOrganizations();
+            checkYouTubeStatus();
+        });
+
+        async function checkYouTubeStatus() {
+            try {
+                const response = await fetch('/api/youtube/status');
+                const status = await response.json();
+                
+                const statusDiv = document.getElementById('youtube-status');
+                const refreshBtn = document.getElementById('refresh-youtube-cache');
+                
+                if (status.authenticated && status.status === 'valid') {
+                    statusDiv.className = 'youtube-auth-status auth-success';
+                    statusDiv.innerHTML = '✅ YouTube authenticated - Video checking enabled';
+                    refreshBtn.style.display = 'inline-block';
+                } else if (status.status === 'no_token_file') {
+                    statusDiv.className = 'youtube-auth-status auth-warning';
+                    statusDiv.innerHTML = '⚠️ YouTube not configured - Videos will be downloaded only';
+                } else {
+                    statusDiv.className = 'youtube-auth-status auth-error';
+                    statusDiv.innerHTML = `❌ YouTube authentication issue: ${status.message}`;
+                }
+            } catch (error) {
+                console.error('Error checking YouTube status:', error);
+            }
+        }
+
+        async function refreshYouTubeCache() {
+            const button = document.getElementById('refresh-youtube-cache');
+            const originalText = button.textContent;
+            
+            button.disabled = true;
+            button.textContent = 'Refreshing...';
+            
+            try {
+                const response = await fetch('/api/youtube/refresh_cache', { method: 'POST' });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`Successfully cached ${result.cached_videos} videos from YouTube`);
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (error) {
+                alert('Error refreshing cache: ' + error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                const data = await response.json();
+                
+                const select = document.getElementById('zoom-user');
+                select.innerHTML = '<option value="me">Me (Current User)</option>';
+                
+                if (data.users) {
+                    data.users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.id;
+                        option.textContent = `${user.display_name} (${user.email})`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        async function loadOrganizations() {
+            try {
+                const response = await fetch('/api/organizations');
+                const data = await response.json();
+                
+                const select = document.getElementById('eventbrite-org');
+                select.innerHTML = '';
+                
+                if (data.organizations) {
+                    organizations = data.organizations;
+                    data.organizations.forEach(org => {
+                        const option = document.createElement('option');
+                        option.value = org.id;
+                        option.textContent = org.name;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading organizations:', error);
+                document.getElementById('eventbrite-org').innerHTML = '<option value="">Error loading organizations</option>';
+            }
+        }
+
+        async function fetchMeetings() {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+            const userId = document.getElementById('zoom-user').value;
+            
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+            
+            const button = document.getElementById('fetch-meetings');
+            button.disabled = true;
+            button.textContent = 'Fetching...';
+            
+            try {
+                const response = await fetch('/api/meetings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        start_date: startDate,
+                        end_date: endDate,
+                        user_id: userId,
+                        source: 'api'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    meetings = data.meetings;
+                    displayMeetings();
+                } else {
+                    throw new Error(data.error || 'Failed to fetch meetings');
+                }
+            } catch (error) {
+                alert('Error fetching meetings: ' + error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Get Zoom Meetings';
+            }
+        }
+
+        function displayMeetings() {
+            const container = document.getElementById('meetings-list');
+            
+            if (meetings.length === 0) {
+                container.innerHTML = '<p>No meetings with recordings found in the selected date range.</p>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            meetings.forEach((meeting, index) => {
+                const div = document.createElement('div');
+                div.className = 'meeting-item';
+                
+                const date = new Date(meeting.start_time);
+                
+                div.innerHTML = `
+                    <h4>${meeting.topic}</h4>
+                    <div class="meeting-meta">
+                        Date: ${date.toLocaleDateString()} ${date.toLocaleTimeString()} | 
+                        Duration: ${meeting.duration} minutes | 
+                        Recordings: ${meeting.recording_count}
+                    </div>
+                    <button onclick="findEvents('${meeting.id}', '${meeting.start_time}', ${index})">
+                        Find Matching Events
+                    </button>
+                    <div id="events-${index}" class="results"></div>
+                `;
+                
+                container.appendChild(div);
+            });
+        }
+
+        async function findEvents(meetingId, startTime, meetingIndex) {
+            const orgId = document.getElementById('eventbrite-org').value;
+            
+            if (!orgId) {
+                alert('Please select an Eventbrite organization');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/events', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        meeting_date: startTime,
+                        organization_id: orgId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayEvents(data.events, meetingIndex, meetingId);
+                } else {
+                    throw new Error(data.error || 'Failed to fetch events');
+                }
+            } catch (error) {
+                alert('Error fetching events: ' + error.message);
+            }
+        }
+
+        function displayEvents(events, meetingIndex, meetingId) {
+            const container = document.getElementById(`events-${meetingIndex}`);
+            
+            if (events.length === 0) {
+                container.innerHTML = '<p style="margin-top: 10px; color: #666;">No Eventbrite events found for this date.</p>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            events.forEach((event, eventIndex) => {
+                const div = document.createElement('div');
+                div.className = 'event-item';
+                
+                const eventDate = new Date(event.start.local);
+                const eventTitle = event.name.text;
+                
+                // YouTube status display
+                let youtubeStatusHtml = '';
+                if (event.youtube_exists) {
+                    const video = event.youtube_video;
+                    youtubeStatusHtml = `
+                        <div class="youtube-status youtube-exists">
+                            ⚠️ Video already exists on YouTube
+                            <a href="${video.url}" target="_blank" class="youtube-video-link">
+                                View Video
+                            </a>
+                        </div>
+                    `;
+                } else {
+                    youtubeStatusHtml = `
+                        <div class="youtube-status youtube-new">
+                            ✅ No existing video found - ready to upload
+                        </div>
+                    `;
+                }
+                
+                div.innerHTML = `
+                    <h4>${eventTitle}</h4>
+                    <div class="event-meta">
+                        Time: ${eventDate.toLocaleString()} | 
+                        Status: ${event.status}
+                        ${event.description ? `<br>Description: ${event.description.text?.substring(0, 100)}...` : ''}
+                    </div>
+                    ${youtubeStatusHtml}
+                    <button onclick="confirmMatch('${meetingId}', '${event.id}', ${meetingIndex}, ${eventIndex})" 
+                            class="btn-success">
+                        Confirm Match
+                    </button>
+                `;
+                
+                container.appendChild(div);
+            });
+        }
+
+        function confirmMatch(meetingId, eventId, meetingIndex, eventIndex) {
+            const meeting = meetings.find(m => m.id === meetingId);
+            const eventsContainer = document.getElementById(`events-${meetingIndex}`);
+            const eventDiv = eventsContainer.children[eventIndex];
+            const eventTitle = eventDiv.querySelector('h4').textContent;
+            
+            // Find the event data (we need to reconstruct it from the display)
+            const eventData = {
+                id: eventId,
+                name: { text: eventTitle }
+                // Add other event properties as needed
+            };
+            
+            // Add to matches
+            matches.push({
+                zoom_meeting: meeting,
+                eventbrite_event: eventData
+            });
+            
+            // Update UI
+            eventDiv.style.background = '#d4edda';
+            eventDiv.style.border = '2px solid #28a745';
+            eventDiv.querySelector('button').textContent = 'Matched ✓';
+            eventDiv.querySelector('button').disabled = true;
+            
+            updateMatchesDisplay();
+        }
+
+        function updateMatchesDisplay() {
+            const container = document.getElementById('matches-container');
+            const list = document.getElementById('matches-list');
+            
+            if (matches.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            container.style.display = 'block';
+            list.innerHTML = '';
+            
+            matches.forEach((match, index) => {
+                const div = document.createElement('div');
+                div.className = 'match-pair';
+                
+                const meetingDate = new Date(match.zoom_meeting.start_time);
+                
+                div.innerHTML = `
+                    <div>
+                        <h4>📹 ${match.zoom_meeting.topic}</h4>
+                        <div class="meeting-meta">
+                            ${meetingDate.toLocaleString()} | 
+                            ${match.zoom_meeting.duration} minutes
+                        </div>
+                    </div>
+                    <div>
+                        <h4>🎫 ${match.eventbrite_event.name.text}</h4>
+                        <div class="event-meta">
+                            Eventbrite Event
+                        </div>
+                    </div>
+                    <button onclick="removeMatch(${index})" class="btn-danger" style="grid-column: 1 / -1;">
+                        Remove Match
+                    </button>
+                `;
+                
+                list.appendChild(div);
+            });
+        }
+
+        function removeMatch(index) {
+            matches.splice(index, 1);
+            updateMatchesDisplay();
+        }
+
+        async function processMatches() {
+            if (matches.length === 0) {
+                alert('No matches to process');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/process_matches', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        matches: matches
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    processingSessionId = data.session_id;
+                    startProcessingMonitor();
+                } else {
+                    throw new Error(data.error || 'Failed to start processing');
+                }
+            } catch (error) {
+                alert('Error starting processing: ' + error.message);
+            }
+        }
+
+        function startProcessingMonitor() {
+            document.getElementById('processing-section').style.display = 'block';
+            document.getElementById('process-matches').disabled = true;
+            
+            const interval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/processing_status/${processingSessionId}`);
+                    const status = await response.json();
+                    
+                    updateProcessingDisplay(status);
+                    
+                    if (status.status === 'completed' || status.status === 'error') {
+                        clearInterval(interval);
+                        document.getElementById('process-matches').disabled = false;
+                        
+                        if (status.status === 'completed') {
+                            alert('Processing completed successfully!');
+                        } else {
+                            alert('Processing failed. Check the messages for details.');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking status:', error);
+                    clearInterval(interval);
+                }
+            }, 2000);
+        }
+
+        function updateProcessingDisplay(status) {
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            const statusMessages = document.getElementById('status-messages');
+            
+            const percentage = status.total > 0 ? (status.current / status.total) * 100 : 0;
+            progressFill.style.width = percentage + '%';
+            
+            progressText.textContent = `${status.current}/${status.total} - ${status.status}`;
+            
+            if (status.messages && status.messages.length > 0) {
+                statusMessages.innerHTML = status.messages
+                    .map(msg => `<div>${msg}</div>`)
+                    .join('');
+                statusMessages.scrollTop = statusMessages.scrollHeight;
+            }
+        }
+
+        // Add event listener for refresh cache button
+        document.getElementById('refresh-youtube-cache').addEventListener('click', refreshYouTubeCache);
+    </script>
+</body>
+</html>
