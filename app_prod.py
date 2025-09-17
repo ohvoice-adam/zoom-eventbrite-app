@@ -41,7 +41,8 @@ def create_app():
     if config_errors:
         app.logger.error("Configuration errors: %s", config_errors)
         if not config.DEBUG:
-            flash("Configuration errors detected. Check logs.", "error")
+            # Don't use flash() during app initialization - it requires request context
+            app.logger.warning("Configuration errors detected. Check logs for details.")
     
     # Initialize services
     from services.youtube_service import YouTubeService
