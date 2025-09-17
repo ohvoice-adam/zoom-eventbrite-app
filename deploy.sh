@@ -320,12 +320,43 @@ EOF
 0 2 * * * $USER $APP_DIR/scripts/cleanup.sh >> $APP_DIR/logs/cleanup.log 2>&1
 EOF
 
-    log "✅ Maintenance tasks configured"
+check_existing_nginx() {
+    log "🔍 Checking existing nginx configuration..."
+    
+    # Check if nginx is running and has existing configurations
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+        log "✅ Nginx is already running"
+        
+        # Count existing site configurations
+        EXISTING_SITES=$(find /etc/nginx/sites-enabled -name "*.conf" -o -name "*" ! -name "default" | wc -l)
+        
+        if [[ $EXISTING_SITES -gt 0 ]]; then
+            log "📋 Found $EXISTING_SITES existing nginx site(s)"
+            log "   The deploy script will create a separate config for this app"
+        fi
+        
+        # Check if a domain was specified
+        if [[ -z "$DOMAIN" ]] || [[ "$DOMAIN" == "localhost" ]]; then
+            warn "⚠️  No domain specified! This could conflict with existing sites."
+            warn "   Recommendation: Use --domain subdomain.yourdomain.com"
+            echo
+            echo "   Do you want to continue anyway? This will create a catch-all server block."
+            echo "   Your existing sites should still work, but this is not recommended."
+            echo
+            read -p "   Continue? (y/N): " -r
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                log "Deployment cancelled. Please specify a domain with --domain"
+                exit 0
+            fi
+        else
+            log "✅ Domain specified: $DOMAIN (this will not conflict with other sites)"
+        fi
+    else
+        log "📦 Nginx not currently running - will set up fresh configuration"
+    fi
 }
 
-# =============================================================================
-# DEPLOYMENT LOGIC - Now we can safely use the functions
-# =============================================================================
+# Add this function call to the deployment sections
 
 # Development deployment
 if [[ "$DEPLOYMENT_TYPE" == "development" ]]; then
@@ -737,6 +768,7 @@ else
     create_systemd_service
     
     # Setup nginx
+    check_existing_nginx
     setup_nginx_config
     
     # Enable and start services
