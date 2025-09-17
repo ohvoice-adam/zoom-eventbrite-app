@@ -320,6 +320,9 @@ EOF
 0 2 * * * $USER $APP_DIR/scripts/cleanup.sh >> $APP_DIR/logs/cleanup.log 2>&1
 EOF
 
+    log "✅ Maintenance tasks configured"
+}
+
 check_existing_nginx() {
     log "🔍 Checking existing nginx configuration..."
     
@@ -355,8 +358,6 @@ check_existing_nginx() {
         log "📦 Nginx not currently running - will set up fresh configuration"
     fi
 }
-
-# Add this function call to the deployment sections
 
 # Development deployment
 if [[ "$DEPLOYMENT_TYPE" == "development" ]]; then
@@ -694,6 +695,7 @@ networks:
     driver: bridge
 EOF
     fi
+    
     log "🏗️  Building and starting Docker containers..."
     docker-compose down --remove-orphans 2>/dev/null || true
     docker-compose build --no-cache
@@ -824,190 +826,3 @@ echo "📊 Logs: $APP_DIR/logs/ (or docker-compose logs)"
 echo "🔧 Config: $APP_DIR/.env"
 echo "🗄️ Database: $APP_DIR/data/app.db"
 echo
-
-# Function definitions
-setup_ssl_certificate() {
-    log "🔒 Setting up SSL certificate for $DOMAIN..."
-    
-    if [[ "$DEPLOYMENT_TYPE" == "docker" ]]; then
-        # For Docker, we need to configure external nginx or use a reverse proxy
-        warn "SSL setup for Docker requires external reverse proxy configuration"
-        warn "Consider using Traefik, nginx-proxy, or configure nginx manually"
-        warn "Current setup provides HTTP only on port 80"
-    else
-        # Traditional deployment with certbot
-        if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "admin@$DOMAIN"; then
-            log "✅ SSL certificate configured successfully"
-        else
-            warn "SSL certificate setup failed - continuing without HTTPS"
-        fi
-    fi
-}
-
-create_systemd_service() {
-    cat > /etc/systemd/system/"$APP_NAME".service << EOF
-[Unit]
-Description=Zoom-Eventbrite App
-After=network.target
-
-[Service]
-Type=simple
-User=$USER
-WorkingDirectory=$APP_DIR
-Environment=PATH=$APP_DIR/venv/bin
-ExecStart=$APP_DIR/venv/bin/gunicorn --bind ${FLASK_HOST:-127.0.0.1}:${FLASK_PORT:-5000} --workers ${GUNICORN_WORKERS:-4} --timeout ${GUNICORN_TIMEOUT:-300} app_prod:app
-Restart=always
-RestartSec=10
-EnvironmentFile=$APP_DIR/.env
-
-# Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-EOF
-}
-
-setup_nginx_config() {
-    log "🌐 Configuring Nginx..."
-    
-    FLASK_PORT="${FLASK_PORT:-5000}"
-    FLASK_HOST="${FLASK_HOST:-127.0.0.1}"
-    
-    cat > /etc/nginx/sites-available/"$APP_NAME" << EOF
-upstream ${APP_NAME}_app {
-    server ${FLASK_HOST}:${FLASK_PORT};
-}
-
-server {
-    listen 80;
-    server_name ${DOMAIN:-_};
-    
-    client_max_body_size ${MAX_CONTENT_LENGTH:-100M};
-    client_body_timeout 300s;
-
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-
-    # Gzip compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml+rss text/javascript;
-
-    # Rate limiting for API endpoints
-    limit_req_zone \$binary_remote_addr zone=api:10m rate=10r/m;
-    limit_req_zone \$binary_remote_addr zone=general:10m rate=100r/m;
-
-    location /api/ {
-        limit_req zone=api burst=20 nodelay;
-        
-        proxy_pass http://${APP_NAME}_app;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        proxy_connect_timeout 300s;
-        proxy_send_timeout 300s;
-        proxy_read_timeout 300s;
-        
-        proxy_buffering off;
-    }
-
-    location / {
-        limit_req zone=general burst=50 nodelay;
-        
-        proxy_pass http://${APP_NAME}_app;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        proxy_connect_timeout 300s;
-        proxy_send_timeout 300s;
-        proxy_read_timeout 300s;
-        
-        proxy_buffering off;
-    }
-
-    location /health {
-        access_log off;
-        return 200 "healthy\\n";
-        add_header Content-Type text/plain;
-    }
-
-    location /static/ {
-        alias $APP_DIR/static/;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # Block common attack patterns
-    location ~ /\\.(ht|git|env) {
-        deny all;
-        access_log off;
-        log_not_found off;
-        return 404;
-    }
-
-    location ~ ~\$ {
-        deny all;
-        access_log off;
-        log_not_found off;
-        return 404;
-    }
-}
-EOF
-
-    # Enable site
-    ln -sf /etc/nginx/sites-available/"$APP_NAME" /etc/nginx/sites-enabled/
-    rm -f /etc/nginx/sites-enabled/default
-    
-    # Test nginx config
-    nginx -t || error "Nginx configuration test failed"
-}
-
-setup_maintenance_tasks() {
-    log "⏰ Setting up maintenance tasks..."
-    
-    # Create cleanup script
-    mkdir -p "$APP_DIR/scripts"
-    cat > "$APP_DIR/scripts/cleanup.sh" << 'EOF'
-#!/bin/bash
-# Cleanup old files and optimize database
-
-APP_DIR="/opt/zoom-eventbrite-app"
-DAYS_TO_KEEP_DOWNLOADS=7
-DAYS_TO_KEEP_LOGS=30
-
-# Clean old downloads
-find "$APP_DIR/downloads" -name "*.mp4" -mtime +$DAYS_TO_KEEP_DOWNLOADS -delete 2>/dev/null || true
-
-# Clean old logs  
-find "$APP_DIR/logs" -name "*.log" -mtime +$DAYS_TO_KEEP_LOGS -delete 2>/dev/null || true
-
-# Vacuum SQLite database to reclaim space
-sqlite3 "$APP_DIR/data/app.db" "VACUUM;" 2>/dev/null || true
-
-# Clean expired processing jobs (older than 7 days)
-sqlite3 "$APP_DIR/data/app.db" "DELETE FROM processing_jobs WHERE created_at < datetime('now', '-7 days');" 2>/dev/null || true
-
-echo "$(date): Cleanup completed"
-EOF
-    
-    chmod +x "$APP_DIR/scripts/cleanup.sh"
-    chown -R "$USER:$USER" "$APP_DIR/scripts" 2>/dev/null || true
-    
-    # Setup cron job
-    cat > /etc/cron.d/"$APP_NAME" << EOF
-# Daily cleanup at 2 AM
-0 2 * * * $USER $APP_DIR/scripts/cleanup.sh >> $APP_DIR/logs/cleanup.log 2>&1
-EOF
-
-    log "✅ Maintenance tasks configured"
-}
