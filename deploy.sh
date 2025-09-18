@@ -376,9 +376,20 @@ if [[ "$DEPLOYMENT_TYPE" == "development" ]]; then
     pip install --upgrade pip
     pip install -r requirements.txt
     
-    # Initialize database
+    # Initialize database with proper paths
     log "Initializing SQLite database..."
-    python -c "from app_prod import app; from models import init_db; app.app_context().push(); init_db()"
+    export FLASK_ENV=development
+    export DATABASE_PATH=./data/app.db
+    export UPLOAD_FOLDER=./uploads
+    export DOWNLOAD_FOLDER=./downloads
+    export CREDENTIALS_FOLDER=./credentials
+    export LOG_FILE=./logs/app.log
+    
+    # Ensure data directory exists with proper permissions
+    mkdir -p data
+    touch data/app.db
+    
+    python scripts/init_db.py
     
     log "🎉 Development setup complete!"
     echo

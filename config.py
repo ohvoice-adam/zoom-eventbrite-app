@@ -105,30 +105,57 @@ class ProductionConfig(Config):
 
 class DevelopmentConfig(Config):
     DEBUG = True
+    
     # Use local directories for development
     @property
     def DATABASE_URL(self):
-        return 'sqlite:///./data/app.db'
+        # Get path from environment or use default
+        db_path = os.environ.get('DATABASE_PATH', './data/app.db')
+        
+        # Convert to absolute path if relative
+        if not os.path.isabs(db_path):
+            db_path = os.path.abspath(db_path)
+        
+        # Ensure directory exists
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            Path(db_dir).mkdir(parents=True, exist_ok=True)
+        
+        return f'sqlite:///{db_path}'
     
     @property
     def UPLOAD_FOLDER(self):
-        Path('./uploads').mkdir(exist_ok=True)
-        return './uploads'
+        folder = os.environ.get('UPLOAD_FOLDER', './uploads')
+        if not os.path.isabs(folder):
+            folder = os.path.abspath(folder)
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        return folder
     
     @property
     def DOWNLOAD_FOLDER(self):
-        Path('./downloads').mkdir(exist_ok=True)
-        return './downloads'
+        folder = os.environ.get('DOWNLOAD_FOLDER', './downloads')
+        if not os.path.isabs(folder):
+            folder = os.path.abspath(folder)
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        return folder
     
     @property
     def CREDENTIALS_FOLDER(self):
-        Path('./credentials').mkdir(exist_ok=True)
-        return './credentials'
+        folder = os.environ.get('CREDENTIALS_FOLDER', './credentials')
+        if not os.path.isabs(folder):
+            folder = os.path.abspath(folder)
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        return folder
     
     @property
     def LOG_FILE(self):
-        Path('./logs').mkdir(exist_ok=True)
-        return './logs/app.log'
+        log_file = os.environ.get('LOG_FILE', './logs/app.log')
+        if not os.path.isabs(log_file):
+            log_file = os.path.abspath(log_file)
+        log_dir = os.path.dirname(log_file)
+        if log_dir:
+            Path(log_dir).mkdir(parents=True, exist_ok=True)
+        return log_file
 
 class TestingConfig(Config):
     TESTING = True
