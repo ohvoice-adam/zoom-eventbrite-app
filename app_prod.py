@@ -1,6 +1,25 @@
 # app_prod.py - Production app with YouTube checking and SQLite
 import sys
 import os
+
+# Load .env file BEFORE importing anything else
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Try to find and load .env file
+env_path = Path('.') / '.env'
+if not env_path.exists():
+    env_path = Path(__file__).parent / '.env'
+
+if env_path.exists():
+    load_dotenv(env_path, override=True)
+    print(f"Loaded .env from {env_path.absolute()}")
+    # Debug: Check if credentials are loaded
+    client_id = os.environ.get('GOOGLE_SSO_CLIENT_ID', 'NOT SET')
+    print(f"Google Client ID loaded: {client_id[:30]}..." if client_id != 'NOT SET' else "Google Client ID: NOT SET")
+else:
+    print(f"Warning: .env file not found at {env_path.absolute()}")
+
 import logging
 from logging.handlers import RotatingFileHandler
 import traceback
@@ -12,6 +31,7 @@ from functools import wraps
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
+import werkzeug.exceptions
 import secrets
 
 from config import get_config
@@ -26,6 +46,11 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = config.DATABASE_URL
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
+    
+    # Add Google OAuth configuration to Flask config
+    app.config['GOOGLE_SSO_CLIENT_ID'] = config.GOOGLE_SSO_CLIENT_ID
+    app.config['GOOGLE_SSO_CLIENT_SECRET'] = config.GOOGLE_SSO_CLIENT_SECRET
+    app.config['ALLOWED_DOMAIN'] = config.ALLOWED_DOMAIN
     
     # Trust proxy headers (for nginx)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -86,8 +111,21 @@ def setup_logging(app):
 def register_error_handlers(app):
     """Register global error handlers"""
     
+    @app.errorhandler(404)
+    def handle_404(error):
+        # Ignore favicon requests
+        if request.path == '/favicon.ico':
+            return '', 204
+        app.logger.warning(f"404 error: {request.path}")
+        if request.path.startswith('/api/'):
+            return jsonify({'error': 'Endpoint not found'}), 404
+        return render_template('404.html'), 404
+    
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):
+        # Don't log 404 errors again
+        if isinstance(error, werkzeug.exceptions.NotFound):
+            return handle_404(error)
         app.logger.error("Unexpected error: %s\n%s", str(error), traceback.format_exc())
         if app.debug:
             raise error
@@ -221,8 +259,11 @@ app = create_app()
 
 if __name__ == '__main__':
     if config.DEBUG:
-        print(f"Starting development server on {config.HOST}:{config.PORT}")
-        app.run(debug=True, host=config.HOST, port=config.PORT)
+        # Get host and port from environment or config
+        host = os.environ.get('FLASK_HOST', config.HOST)
+        port = int(os.environ.get('FLASK_PORT', config.PORT))
+        print(f"Starting development server on {host}:{port}")
+        app.run(debug=True, host=host, port=port)
     else:
         print("Use gunicorn for production deployment")
         print(f"gunicorn --bind {config.HOST}:{config.PORT} --workers {config.WORKERS} --timeout {config.TIMEOUT} app_prod:app")
